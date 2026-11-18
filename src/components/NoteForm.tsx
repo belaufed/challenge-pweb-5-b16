@@ -3,15 +3,16 @@ import { useState, type FormEvent } from "react";
 import type { Note } from "../types/note";
 
 interface NoteFormProps {
-  onAddNote: (note: Note) => void;
+  onAddNote: (note: Note) => Promise<boolean>;
 }
 
 export default function NoteForm({ onAddNote }: NoteFormProps) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("Umum");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!title.trim() || !content.trim()) {
@@ -26,11 +27,17 @@ export default function NoteForm({ onAddNote }: NoteFormProps) {
       category,
     };
 
-    onAddNote(newNote);
-
-    setTitle("");
-    setContent("");
-    setCategory("Umum");
+    setIsSubmitting(true);
+    try {
+      const saved = await onAddNote(newNote);
+      if (saved) {
+        setTitle("");
+        setContent("");
+        setCategory("Umum");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -68,7 +75,9 @@ export default function NoteForm({ onAddNote }: NoteFormProps) {
         <option value="Pribadi">Pribadi</option>
       </select>
 
-      <button type="submit">+ Tambah Catatan</button>
+      <button type="submit" disabled={isSubmitting}>
+        {isSubmitting ? "Menyimpan..." : "+ Tambah Catatan"}
+      </button>
     </form>
   );
 }

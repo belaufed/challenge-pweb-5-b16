@@ -8,7 +8,10 @@ Aplikasi catatan sederhana untuk Challenge Praktikum Pemrograman Web Modul 5. Pr
 - Menampilkan catatan dalam kartu.
 - Menghapus catatan.
 - Mencari catatan berdasarkan judul.
-- Menyimpan catatan di `localStorage` agar tetap tersedia setelah halaman dimuat ulang.
+- Memuat, menambahkan, dan menghapus post melalui REST API.
+- Mencari post melalui query `?search=...` pada endpoint backend.
+- Menyimpan catatan terakhir di `localStorage` sebagai cache browser.
+- Menampilkan status loading dan pesan error saat berkomunikasi dengan API.
 
 ## Menjalankan proyek
 
@@ -16,6 +19,20 @@ Aplikasi catatan sederhana untuk Challenge Praktikum Pemrograman Web Modul 5. Pr
 npm install
 npm run dev
 ```
+
+## Konfigurasi REST API
+
+Salin `.env.example` menjadi `.env` lalu sesuaikan `VITE_API_URL` dengan URL endpoint koleksi post backend Express. Nilai default-nya adalah `http://localhost:3000/api/posts`. Jika memakai JSONPlaceholder, atur nilainya menjadi `https://jsonplaceholder.typicode.com/posts`.
+
+Frontend mengharapkan endpoint berikut:
+
+| Method | Endpoint | Perilaku |
+| --- | --- | --- |
+| `GET` | `/api/posts?search=...` | Mengembalikan array post, atau `{ "data": [...] }` / `{ "posts": [...] }`. Setiap item memiliki `id`, `title`, dan `content` atau `body`. |
+| `POST` | `/api/posts` | Menerima `title`, `content`, `body`, `category`, dan `userId`; idealnya mengembalikan post yang dibuat. Frontend mengirim `content` dan `body` dengan isi yang sama untuk mendukung kedua format API. |
+| `DELETE` | `/api/posts/:id` | Menghapus post berdasarkan ID dan mengembalikan status sukses (termasuk `204 No Content`). |
+
+Kolom `body` dari JSONPlaceholder dipetakan menjadi isi catatan (`content`), dan kategori akan ditampilkan sebagai `Umum` jika API tidak mengirimkannya. Endpoint yang menerima pencarian sebaiknya memfilter dan mengembalikan post yang cocok; frontend juga memfilter hasil berdasarkan judul. JSONPlaceholder tidak menyediakan filter `search` standar, jadi gunakan backend Modul 4 untuk demonstrasi pencarian server-side. Jika frontend dan backend berjalan pada origin berbeda, backend Express harus mengaktifkan CORS untuk origin Vite (biasanya `http://localhost:5173`), misalnya dengan `app.use(cors({ origin: "http://localhost:5173" }))` sebelum deklarasi route. CORS perlu dikonfigurasi di backend, bukan di React. Jangan menyimpan kredensial Neon di aplikasi frontend.
 
 Untuk membuat build produksi:
 
@@ -30,6 +47,8 @@ src/
 ├── components/
 │   ├── NoteCard.tsx
 │   └── NoteForm.tsx
+├── services/
+│   └── notesApi.ts
 ├── types/
 │   └── note.ts
 ├── App.tsx

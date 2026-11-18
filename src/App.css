@@ -165,6 +165,23 @@
   border-radius: 14px;
 }
 
+.api-status,
+.api-error {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border-radius: 10px;
+}
+
+.api-status {
+  color: #49347a;
+  background: #eee6ff;
+}
+
+.api-error {
+  color: #9e253b;
+  background: #ffe4e8;
+}
+
 .app-footer {
   text-align: center;
   margin-top: 55px;

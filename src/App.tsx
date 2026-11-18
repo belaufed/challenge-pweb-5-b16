@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import NoteForm from "./components/NoteForm";
 import NoteCard from "./components/NoteCard";
 import type { Note } from "./types/note";
+import { createNote, getNotes, removeNote } from "./services/notesApi";
 import "./App.css";
 
 const STORAGE_KEY = "papan-catatan-notes";
@@ -20,32 +21,123 @@ function loadNotes(): Note[] {
 }
 
 function App() {
-  // notes buat nyimpan daftar catatan
-  const [notes, setNotes] = useState<Note[]>(loadNotes);
+  const [cachedNotes, setCachedNotes] = useState<Note[]>(loadNotes);
+  const [notes, setNotes] = useState<Note[]>(cachedNotes);
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [pendingRequests, setPendingRequests] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshVersion, setRefreshVersion] = useState(0);
 
   // search buat nyimpan kata yang diketik di kolom pencarian
   const [search, setSearch] = useState("");
 
-  // setiap notes berubah, datanya disimpan ke localStorage
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
-  }, [notes]);
+    const controller = new AbortController();
+
+    getNotes(search, controller.signal)
+      .then((loadedNotes) => {
+        setNotes(loadedNotes);
+        if (!search.trim()) {
+          setCachedNotes(loadedNotes);
+        }
+      })
+      .catch((requestError: unknown) => {
+        if (!controller.signal.aborted) {
+          setError(
+            requestError instanceof Error
+              ? requestError.message
+              : "Gagal memuat catatan dari server.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [search, refreshVersion]);
+
+  // Simpan daftar lengkap ke cache; hasil pencarian tidak mengganti cache.
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cachedNotes));
+  }, [cachedNotes]);
 
   // nambahin catatan baru ke daftar yang udah ada
-  function addNote(newNote: Note) {
-    setNotes((prevNotes) => [newNote, ...prevNotes]);
+  async function addNote(newNote: Note): Promise<boolean> {
+    setPendingRequests((pending) => pending + 1);
+    setError(null);
+
+    try {
+      const createdNote = await createNote(newNote);
+      if (createdNote) {
+        const prependNote = (prevNotes: Note[]) => [
+          createdNote,
+          ...prevNotes.filter((note) => note.id !== createdNote.id),
+        ];
+        setNotes(prependNote);
+        setCachedNotes(prependNote);
+      } else {
+        const loadedNotes = await getNotes("");
+        setCachedNotes(loadedNotes);
+        setNotes(
+          search.trim()
+            ? loadedNotes.filter((note) =>
+                note.title.toLowerCase().includes(search.trim().toLowerCase()),
+              )
+            : loadedNotes,
+        );
+      }
+      setIsLoading(true);
+      setRefreshVersion((version) => version + 1);
+      return true;
+    } catch (requestError: unknown) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Gagal menambahkan catatan.",
+      );
+      return false;
+    } finally {
+      setPendingRequests((pending) => pending - 1);
+    }
   }
 
   // hapus catatan berdasarkan ID yang dipilih
-  function deleteNote(id: string) {
-    setNotes((prevNotes) =>
-      prevNotes.filter((note) => note.id !== id)
-    );
+  async function deleteNote(id: string): Promise<void> {
+    setPendingRequests((pending) => pending + 1);
+    setError(null);
+
+    try {
+      await removeNote(id);
+      setNotes((prevNotes) => prevNotes.filter((note) => note.id !== id));
+      setCachedNotes((prevNotes) => prevNotes.filter((note) => note.id !== id));
+      setIsLoading(true);
+      setRefreshVersion((version) => version + 1);
+    } catch (requestError: unknown) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Gagal menghapus catatan.",
+      );
+    } finally {
+      setPendingRequests((pending) => pending - 1);
+    }
+  }
+
+  function handleSearchChange(value: string) {
+    setIsLoading(true);
+    setError(null);
+    setSearch(value);
   }
 
   // filter catatan berdasarkan judul yang dicari
   const filteredNotes = notes.filter((note) =>
-    note.title.toLowerCase().includes(search.toLowerCase())
+    note.title.toLowerCase().includes(search.trim().toLowerCase())
   );
 
   return (
@@ -69,17 +161,35 @@ function App() {
               className="search-input"
               placeholder="Cari judul catatan..."
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => handleSearchChange(event.target.value)}
             />
           </div>
 
+          {isLoading && (
+            <p className="api-status" role="status">
+              Memuat catatan dari server...
+            </p>
+          )}
+          {pendingRequests > 0 && (
+            <p className="api-status" role="status">
+              Menyimpan perubahan...
+            </p>
+          )}
+          {error && (
+            <p className="api-error" role="alert">
+              {error}
+            </p>
+          )}
+
           {/* kalau hasil pencarian kosong, tampilkan pesan */}
           {filteredNotes.length === 0 ? (
-            <p className="empty-message">
-              {search
-                ? "Catatan yang dicari tidak ditemukan."
-                : "Belum ada catatan. Yuk, buat catatan pertama!"}
-            </p>
+            isLoading ? null : (
+              <p className="empty-message">
+                {search
+                  ? "Catatan yang dicari tidak ditemukan."
+                  : "Belum ada catatan. Yuk, buat catatan pertama!"}
+              </p>
+            )
           ) : (
             <div className="notes-grid">
               {/* tampilkan setiap catatan pakai komponen NoteCard */}
