@@ -5,13 +5,15 @@ import NoteCard from "./components/NoteCard";
 import type { Note } from "./types/note";
 import "./App.css";
 
-const STORAGE_KEY = "catatan-nadia";
+const STORAGE_KEY = "papan-catatan-notes";
 
 // ambil catatan yang sebelumnya udah disimpan di browser
 function loadNotes(): Note[] {
   try {
     const savedNotes = localStorage.getItem(STORAGE_KEY);
-    return savedNotes ? JSON.parse(savedNotes) : [];
+    const parsedNotes: unknown = savedNotes ? JSON.parse(savedNotes) : [];
+
+    return Array.isArray(parsedNotes) ? (parsedNotes as Note[]) : [];
   } catch {
     return [];
   }
