@@ -195,3 +195,72 @@ useEffect(() => {
 1. Jalankan `npm run dev`.
 2. Tambahkan beberapa catatan, lalu coba fitur cari dan hapus.
 3. Refresh halaman. Jika catatan masih ada, fitur `localStorage` berfungsi dengan benar.
+
+### Arul — Integrasi REST API Modul 4
+
+**File yang dibuat/diubah:** `src/services/notesApi.ts`, `src/App.tsx`, `src/components/NoteForm.tsx`, `.env.example`, `.gitignore`, `src/App.css`, dan `README.md`.
+
+Bagian Arul menghubungkan frontend ke REST API dengan endpoint koleksi `/api/posts`. Backend Express + Neon Modul 4 tidak berada di repository frontend ini, sehingga route, koneksi database, dan middleware CORS harus disediakan/dijalankan dari proyek backend.
+
+#### Langkah 1 — Mengonfigurasi alamat API
+
+`.env.example` berisi alamat default:
+
+```dotenv
+VITE_API_URL=http://localhost:3000/api/posts
+```
+
+Salin menjadi `.env` di root proyek, lalu sesuaikan URL dengan backend yang dijalankan. Untuk mencoba GET memakai API publik, URL dapat diganti menjadi `https://jsonplaceholder.typicode.com/posts`. Setelah mengubah `.env`, restart server Vite. Jangan menaruh password atau connection string Neon di frontend karena nilai `VITE_*` dapat dibaca browser.
+
+#### Langkah 2 — Memusatkan request di `notesApi.ts`
+
+Service menyediakan tiga fungsi agar komponen tidak perlu menulis `fetch` langsung:
+
+```ts
+getNotes(search, signal); // GET /api/posts?search=...
+createNote(note);         // POST /api/posts
+removeNote(id);           // DELETE /api/posts/:id
+```
+
+- `getNotes` menambahkan query `search` jika pencarian tidak kosong, lalu menormalisasi respons array menjadi daftar `Note`.
+- `extractNote` menerima isi post dari field `content` atau `body`. Ini mendukung API Modul 4 maupun bentuk post JSONPlaceholder. ID dijadikan string, dan kategori yang tidak dikirim API diberi nilai `"Umum"`.
+- `createNote` mengirim JSON yang berisi `title`, `content`, `body`, `category`, dan `userId`. Field `content` dan `body` memiliki isi yang sama agar cocok dengan kedua skema API.
+- `removeNote` mengirim request ke URL post berdasarkan ID yang di-encode.
+- `readResponse` menangani status HTTP gagal dan respons kosong seperti `204 No Content`; respons JSON dengan format salah menghasilkan error.
+
+#### Langkah 3 — Menghubungkan API di `App.tsx`
+
+- Effect React memanggil GET saat halaman dibuka, saat nilai `search` berubah, dan setelah operasi CRUD berhasil.
+- `AbortController` membatalkan request pencarian lama agar hasil lama tidak menimpa hasil yang lebih baru.
+- State `isLoading`, `pendingRequests`, dan `error` dipakai untuk menampilkan status memuat, menyimpan, dan pesan error.
+- Saat POST sukses, state catatan diperbarui tanpa refresh. Saat DELETE sukses, catatan dihapus dari state. Jika request gagal, error ditampilkan dan perubahan tidak dianggap berhasil.
+- Pencarian dikirim ke backend lewat `?search=...`; hasilnya juga difilter judulnya di frontend.
+- `localStorage` tetap digunakan sebagai cache daftar lengkap. Hasil pencarian tidak mengganti cache tersebut.
+
+#### Langkah 4 — Menunggu hasil POST di `NoteForm.tsx`
+
+`onAddNote` sekarang asynchronous dan mengembalikan boolean. Form menunggu hasil request, menampilkan tombol **Menyimpan...**, lalu mengosongkan input hanya jika POST berhasil. Jika gagal, isi form dipertahankan agar pengguna dapat mencoba lagi.
+
+#### Langkah 5 — Menyiapkan backend dan CORS
+
+Backend harus menyediakan route GET, POST, dan DELETE sesuai kontrak API di bagian **Konfigurasi REST API** di atas. Jika frontend dan backend berjalan pada origin berbeda, tambahkan CORS di server Express sebelum route, contohnya:
+
+```ts
+app.use(cors({ origin: "http://localhost:5173" }));
+app.use(express.json());
+```
+
+Konfigurasi tersebut adalah contoh untuk backend dan bukan file yang ada di repository frontend. Backend juga perlu membaca query `search` dan memfilter post berdasarkan judul jika ingin mendemonstrasikan pencarian server-side.
+
+#### Cara menguji integrasi
+
+1. Jalankan backend Modul 4 dan pastikan route `/api/posts` serta CORS aktif.
+2. Atur `VITE_API_URL` di file `.env` sesuai alamat backend, lalu jalankan frontend dengan `npm run dev`.
+3. Buka Developer Tools browser pada tab **Network**, lalu muat ulang halaman. Pastikan GET `/api/posts` berhasil dan daftar post muncul.
+4. Tambahkan post. Pastikan request POST berhasil, tombol menunjukkan status menyimpan, form direset, dan post muncul tanpa refresh.
+5. Hapus post. Pastikan request DELETE berhasil dan kartu langsung hilang.
+6. Ketik kata pada kolom pencarian. Pastikan request GET berikutnya mengandung `?search=...` dan daftar hasil diperbarui.
+7. Untuk menguji error, hentikan backend lokal sementara dan muat ulang halaman. Pastikan pesan error tampil. Jalankan kembali backend setelah pengujian.
+8. Jalankan `npm run build` dan `npm run lint` untuk memeriksa TypeScript/build dan lint.
+
+**Catatan API publik:** JSONPlaceholder menggunakan field `body`, tetapi POST dan DELETE-nya hanya simulasi dan perubahannya tidak tersimpan permanen. API tersebut juga tidak menyediakan pencarian judul standar dengan `?search=...`. Gunakan backend Modul 4 untuk mendemonstrasikan CRUD persisten, Neon, dan pencarian server-side.
