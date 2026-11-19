@@ -37,6 +37,7 @@ function App() {
 
     getNotes(search, controller.signal)
       .then((loadedNotes) => {
+        setError(null);
         setNotes(loadedNotes);
         if (!search.trim()) {
           setCachedNotes(loadedNotes);
@@ -45,9 +46,11 @@ function App() {
       .catch((requestError: unknown) => {
         if (!controller.signal.aborted) {
           setError(
-            requestError instanceof Error
-              ? requestError.message
-              : "Gagal memuat catatan dari server.",
+            requestError instanceof TypeError
+              ? "API tidak dapat dijangkau. Periksa server, URL API, atau CORS. Catatan tersimpan di browser tetap dapat digunakan."
+              : requestError instanceof Error
+                ? requestError.message
+                : "Gagal memuat catatan dari server.",
           );
         }
       })
@@ -96,6 +99,19 @@ function App() {
       setRefreshVersion((version) => version + 1);
       return true;
     } catch (requestError: unknown) {
+      if (requestError instanceof TypeError) {
+        const saveLocally = (prevNotes: Note[]) => [
+          newNote,
+          ...prevNotes.filter((note) => note.id !== newNote.id),
+        ];
+        setNotes(saveLocally);
+        setCachedNotes(saveLocally);
+        setError(
+          "Server tidak dapat dijangkau. Catatan disimpan di browser (localStorage), tetapi belum tersinkron ke server.",
+        );
+        return true;
+      }
+
       setError(
         requestError instanceof Error
           ? requestError.message
@@ -119,6 +135,15 @@ function App() {
       setIsLoading(true);
       setRefreshVersion((version) => version + 1);
     } catch (requestError: unknown) {
+      if (requestError instanceof TypeError) {
+        setNotes((prevNotes) => prevNotes.filter((note) => note.id !== id));
+        setCachedNotes((prevNotes) => prevNotes.filter((note) => note.id !== id));
+        setError(
+          "Server tidak dapat dijangkau. Catatan dihapus dari browser saja; perubahan belum tersinkron ke server.",
+        );
+        return;
+      }
+
       setError(
         requestError instanceof Error
           ? requestError.message
